@@ -441,7 +441,9 @@ async function resolveLoc(text){
 }
 const GM='https://www.google.com/maps';
 function ll(p){return`${p.lat},${p.lng}`}
-function placeLink(p){if(p.mapUrl&&/^https?:\/\//.test(p.mapUrl)&&!/goo\.gl|maps\.app/.test(p.mapUrl)&&/\/place\//.test(p.mapUrl))return p.mapUrl;const nm=p.name&&!p.needName?p.name:'';if(hasXY(p)&&nm)return`${GM}/search/${encodeURIComponent(nm)}/@${p.lat},${p.lng},18z`;if(hasXY(p))return`${GM}/search/?api=1&query=${ll(p)}`;if(p.mapUrl&&/^https?:\/\//.test(p.mapUrl))return p.mapUrl;return`${GM}/search/?api=1&query=${encodeURIComponent((p.name||'')+' '+(S.info?.destination||''))}`}
+function placeLink(p){if(p.mapUrl&&/^https?:\/\//.test(p.mapUrl)&&!/goo\.gl|maps\.app/.test(p.mapUrl)&&/\/place\//.test(p.mapUrl))return p.mapUrl;const nm=p.name&&!p.needName?p.name:'';if(hasXY(p)&&nm)return`${GM}/search/${encodeURIComponent(nm)}/@${p.lat},${p.lng},18z`;if(hasXY(p))return`${GM}/search/?api=1&query=${ll(p)}`;if(p.mapUrl&&/^https?:\/\//.test(p.mapUrl))return p.mapUrl;return`${GM}/search/?api=1&query=${encodeURIComponent([p.name||'',p.address||S.info?.destination||''].filter(Boolean).join(' '))}`}
+/* 공항·역 보기 링크: 장소와 같은 방식(이름+정확한 위치) */
+function endLink(t,w){const q=endPt(t,w);const tx=(t[w+'Loc']||'').trim();if(!q&&!tx)return`${GM}/search/?api=1&query=${encodeURIComponent(t[w]||'')}`;return placeLink({name:t[w]||'',lat:q?q.lat:undefined,lng:q?q.lng:undefined,mapUrl:/^https?:/.test(tx)?tx:'',address:q?'':tx})}
 function dirLink(a,b,mode,way){let u=`${GM}/dir/?api=1&origin=${ll(a)}&destination=${ll(b)}&travelmode=${mode}`;if(way&&way.length)u+='&waypoints='+way.map(ll).join('%7C');return u}
 
 /* ---------- 거리·동선 ---------- */
@@ -593,7 +595,8 @@ function tCard(t){
   <div><span class="tag ${intl?'intl':''}">${intl?'국제':'국내'}</span> <span class="tiny">${esc(t.mode||'')} ${esc(t.carrier||'')} ${esc(t.number||'')}</span></div>
   <div class="route">${esc(t.from||'?')} → ${esc(t.to||'?')}</div>${(endPt(t,'from')||endPt(t,'to'))?`<div class="tiny">📍 ${[endPt(t,'from')?'출발지':'',endPt(t,'to')?'도착지':''].filter(Boolean).join('·')} 위치 등록됨</div>`:''}${t.scope==='intl'&&t.mode==='항공'?['from','to'].filter(w=>(t[w]||'').trim()&&!KR_AIR.test(t[w])&&!endPt(t,w)&&!(t[w+'Loc']||'').trim()).map(w=>`<div class="tiny"><span class="tag warn">해외 공항 위치 없음 · ${w==='from'?'출발지':'도착지'}</span></div>`).join(''):''}
   <div class="muted">${fmtDT(t.depart)}${t.arrive?' → '+fmtDT(t.arrive):''}</div>
-  ${t.bookingRef?`<div class="tiny">예약번호 <b>${esc(t.bookingRef)}</b></div>`:''}${attHTML(t)}</div></div></div>`;
+  ${t.bookingRef?`<div class="tiny">예약번호 <b>${esc(t.bookingRef)}</b></div>`:''}${attHTML(t)}
+  <div class="btns" style="margin-top:8px">${['from','to'].filter(w=>t[w]).map(w=>`<a class="btn sm" data-stop="1" href="${esc(endLink(t,w))}" target="_blank" rel="noopener">구글맵 · ${esc(t[w])}</a>`).join('')}</div></div></div></div>`;
 }
 function sCard(s){
   return`<div class="card" data-act="editS" data-id="${s.id}" style="cursor:pointer"><div class="row"><div class="ico img"><img class="cimg" src="img/ic-hotel.webp" alt=""></div><div class="grow">
@@ -601,7 +604,8 @@ function sCard(s){
   <div class="muted">${fmtD(s.checkIn)} – ${fmtD(s.checkOut)} · ${nights(s.checkIn,s.checkOut)}박</div>
   ${s.address?`<div class="tiny">${esc(s.address)}</div>`:''}
   ${s.bookingRef?`<div class="tiny">예약번호 <b>${esc(s.bookingRef)}</b></div>`:''}
-  ${!hasXY(s)?`<div class="tiny"><span class="tag warn">위치 없음</span> 동선 계산 시작점으로 쓰려면 위치를 넣어 주세요</div>`:''}${attHTML(s)}</div></div></div>`;
+  ${!hasXY(s)?`<div class="tiny"><span class="tag warn">위치 없음</span> 동선 계산 시작점으로 쓰려면 위치를 넣어 주세요</div>`:''}${attHTML(s)}
+  <div class="btns" style="margin-top:8px"><a class="btn sm" data-stop="1" href="${esc(placeLink(s))}" target="_blank" rel="noopener">구글맵에서 보기</a></div></div></div></div>`;
 }
 function attHTML(x){if(!x.attachments?.length)return'';return'<div>'+x.attachments.map(f=>`<a class="att" href="${esc(blobUrl(f.id))}" target="_blank" rel="noopener" data-stop="1">📎 ${esc(f.name||'첨부')}</a>`).join('')+'</div>'}
 function renderHome(){
@@ -843,18 +847,26 @@ function bookingSheet(kind,item){
     if(kind==='transport'){F.ends={from:endPt(x,'from'),to:endPt(x,'to')};
       const hb=sh.querySelector('[data-help]');if(hb)hb.onclick=e=>{e.preventDefault();helpSheet()};
       ['from','to'].forEach(w=>{const u=fm.querySelector(`[name=${w}Loc]`),hint=sh.querySelector(`[data-hint=${w}]`);let sq=0,ut;
-        const show=()=>{const q=F.ends[w];hint.innerHTML=q?`<span class="ok">📍 정확한 위치</span> <a href="${GM}/search/?api=1&query=${ll(q)}" target="_blank" rel="noopener">구글맵에서 확인 ›</a>`:(u.value.trim()?'위치를 읽지 못했어요. 플러스코드나 좌표를 넣어 주세요.':'비워 두면 이름으로 구글맵에서 찾아요.')};
-        const upd=async()=>{const q=++sq;const r=await resolveLoc(u.value);if(q!==sq)return;F.ends[w]=hasXY(r)?{lat:r.lat,lng:r.lng}:null;show()};
+        const show=(r)=>{const q=F.ends[w];const nm=fm.querySelector(`[name=${w}]`).value.trim();const tx=u.value.trim();
+          const link=endLink({[w]:nm,[w+'Lat']:q?q.lat:null,[w+'Lng']:q?q.lng:null,[w+'Loc']:tx},w);
+          hint.innerHTML=(q?`<span class="ok">📍 정확한 위치 (${SRC[F.endSrc&&F.endSrc[w]]||'좌표'})</span>`:(tx?(r&&r.noref?'짧은 플러스코드는 뒤에 도시명을 붙여 주세요 (예: MMFQ+2X 고베).':'주소로 저장돼요. 플러스코드를 함께 넣으면 더 정확해요.'):'비워 두면 이름으로 구글맵에서 찾아요.'))+(nm||tx?` <a class="btn sm" style="margin-top:6px" href="${esc(link)}" target="_blank" rel="noopener">구글맵에서 확인 ›</a>`:'')};
+        F.endSrc=F.endSrc||{};
+        const upd=async()=>{const q=++sq;const r=await resolveLoc(u.value);if(q!==sq)return;F.ends[w]=hasXY(r)?{lat:r.lat,lng:r.lng}:null;F.endSrc[w]=r.src;
+          const nmEl=fm.querySelector(`[name=${w}]`);if(r.name&&!nmEl.value.trim())nmEl.value=r.name;show(r)};
+        fm.querySelector(`[name=${w}]`).addEventListener('input',()=>show());
         u.oninput=()=>{clearTimeout(ut);ut=setTimeout(upd,350)};show()});
       /* 해외 공항이면 위치(주소) 필수 */
       F.needLoc=w=>{const v=fv(fm);return v.scope==='intl'&&v.mode==='항공'&&(v[w]||'').trim()&&!KR_AIR.test(v[w])};
       const mark=()=>['from','to'].forEach(w=>{const el=sh.querySelector(`[data-req=${w}]`);const need=F.needLoc(w);el.textContent=need?'해외 공항 · 필수':'선택';el.style.color=need?'var(--coral)':'';el.style.fontWeight=need?'700':''});
       fm.addEventListener('input',mark);fm.addEventListener('change',mark);mark()}
     if(kind==='stays'){const u=fm.querySelector('[name=loc]'),hint=sh.querySelector('#xyHint');let sq=0,ut;
-      const show=()=>{hint.innerHTML=hasXY(F)?(F.xySrc==='ai'?'<span class="tag warn">대략적 위치</span> 플러스코드를 넣으면 정확해져요':`<span class="ok">📍 정확한 위치 (${SRC[F.xySrc]||'링크'})</span>`):'플러스코드나 좌표를 넣으면 숙소 위치가 정확해져요. 주소만 넣으면 AI가 대략 찾아요.'};
+      const show=(r)=>{const nm=fm.querySelector('[name=name]').value.trim();const link=placeLink({name:nm,lat:F.lat,lng:F.lng,mapUrl:F.url,address:F.address});
+        hint.innerHTML=(hasXY(F)?(F.xySrc==='ai'?'<span class="tag warn">대략적 위치</span> 플러스코드를 넣으면 정확해져요':`<span class="ok">📍 정확한 위치 (${SRC[F.xySrc]||'링크'})</span>`):(r&&r.noref?'짧은 플러스코드는 뒤에 도시명을 붙여 주세요 (예: 2Q5C+68 교토).':'플러스코드나 좌표를 넣으면 숙소 위치가 정확해져요. 주소만 넣으면 동선 계산에서 빠져요.'))
+          +(nm||hasXY(F)?` <a class="btn sm" style="margin-top:6px" href="${esc(link)}" target="_blank" rel="noopener">구글맵에서 확인 ›</a>`:'')};
+      fm.querySelector('[name=name]').addEventListener('input',()=>show());
       const upd=async()=>{const q=++sq;const r=await resolveLoc(u.value);if(q!==sq)return;F.url=r.url||'';F.address=r.address||'';F.locText=u.value.trim();
         if(hasXY(r)){F.lat=r.lat;F.lng=r.lng;F.xySrc=r.src}else if(F.xySrc!=='ai'||!u.value.trim()){F.lat=F.lng=undefined;F.xySrc=null}
-        const nm=fm.querySelector('[name=name]');if(r.name&&!nm.value)nm.value=r.name;show()};
+        const nm=fm.querySelector('[name=name]');if(r.name&&!nm.value)nm.value=r.name;show(r)};
       u.oninput=()=>{clearTimeout(ut);ut=setTimeout(upd,350)};F.address=x.address||'';F.url=x.mapUrl||'';F.locText=x.locText||'';show()}
     sh.querySelector('#fileIn').onchange=async e=>{
       const files=[...e.target.files];
