@@ -683,7 +683,7 @@ function placeCard(p,opts={}){
    </div></div></div></div>`;
 }
 function renderPlaces(){
-  let h=`<div class="row" style="justify-content:flex-end;margin:-6px 0 6px"><button class="btn sm ghost" data-act="help">📍 위치 정확도 높이는 법</button></div><div class="filters">${['전체','미정',...CATS].map(c=>`<button class="fchip ${S.cat===c?'on':''} ${CATS.includes(c)?'cc':''}" style="${CATS.includes(c)?catVars(c):''}" data-act="cat" data-k="${c}">${CATS.includes(c)?catImg(c,'xs'):''}${c}</button>`).join('')}</div>`;
+  let h=`<button class="btn pri" style="width:100%;padding:12px;margin-bottom:10px" data-act="near">📍 지금 내 위치에서 가까운 곳 찾기</button><div class="row" style="justify-content:flex-end;margin:-6px 0 6px"><button class="btn sm ghost" data-act="help">📍 위치 정확도 높이는 법</button></div><div class="filters">${['전체','미정',...CATS].map(c=>`<button class="fchip ${S.cat===c?'on':''} ${CATS.includes(c)?'cc':''}" style="${CATS.includes(c)?catVars(c):''}" data-act="cat" data-k="${c}">${CATS.includes(c)?catImg(c,'xs'):''}${c}</button>`).join('')}</div>`;
   let list=S.places.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   if(S.cat==='미정')list=list.filter(p=>!p.day);else if(S.cat!=='전체')list=list.filter(p=>p.cat===S.cat);
   if(!S.places.length)return h+`<div class="card empty"><img class="eimg" src="img/empty-places.webp" alt=""><p>아래 칸에 구글맵의 <b>주소</b>나 <b>플러스코드</b>를 붙여넣으세요.</p><p class="muted">분류는 입력칸 위 버튼에서 골라 주세요.</p><button class="btn sm" data-act="help">정확한 위치 넣는 법</button></div>`;
@@ -838,6 +838,38 @@ function placeSheet(p,focusLoc){
       const doc={...(p||{}),...v,catFixed:true,locText:u.value.trim(),mapUrl:F.url||'',summary:F.summary||'',tips:F.tips||[],address:F.address||'',lat:hasXY(F)?+F.lat:null,lng:hasXY(F)?+F.lng:null,xySrc:hasXY(F)?(F.xySrc||'link'):null,createdAt:p?.createdAt||Date.now(),createdBy:p?.createdBy||S.me||null};
       delete doc.id;const id=await put('places',p?.id,doc);closeSheet();
       if(!hasXY(doc)&&sample&&id)geocode('places',id,doc)}});
+}
+/* 내 위치에서 가까운 저장 장소 */
+let nearState={cat:'전체',only:false,pos:null};
+function nearSheet(){
+  openSheet(`<h3>📍 가까운 곳 찾기</h3><div id="nearBody"><p class="muted">현재 위치를 확인하는 중…</p></div>`,sh=>{
+    const body=sh.querySelector('#nearBody');
+    const draw=()=>{
+      const me=nearState.pos;const today=iso(new Date());const days=tripDays();
+      let list=S.places.filter(hasXY);
+      if(nearState.cat!=='전체')list=list.filter(p=>p.cat===nearState.cat);
+      if(nearState.only)list=list.filter(p=>!p.day||p.day===today);
+      list=list.map(p=>({p,e:legEst(me,p)})).sort((a,b)=>a.e.km-b.e.km).slice(0,15);
+      const noXY=S.places.filter(p=>!hasXY(p)).length;
+      body.innerHTML=`<div class="filters">${['전체',...CATS].map(c=>`<button class="fchip ${nearState.cat===c?'on':''} ${CATS.includes(c)?'cc':''}" style="${CATS.includes(c)?catVars(c):''}" data-nc="${c}">${CATS.includes(c)?catImg(c,'xs'):''}${c}</button>`).join('')}</div>
+        <label class="tiny row" style="gap:6px;margin:-2px 0 10px;cursor:pointer"><input type="checkbox" data-only ${nearState.only?'checked':''}> 날짜 미정이거나 오늘 갈 곳만 보기</label>
+        ${list.length?list.map(({p,e},i)=>`<div class="card pc" style="${catVars(p.cat)};padding:10px 12px;margin-bottom:8px"><div class="row" style="align-items:flex-start">
+          <div class="num" style="width:26px;height:26px;border-radius:50%;background:var(--cac);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none">${i+1}</div>
+          <div class="grow"><div class="title">${esc(p.name)}</div>
+          <div class="tiny"><span class="cpill">${esc(p.cat||'기타')}</span>${e.km<1?Math.round(e.km*1000)+'m':e.km.toFixed(1)+'km'} · ${e.label} 약 ${fmtMin(e.min)}${p.day?` · ${p.day===today?'오늘 일정':fmtD(p.day)}`:''}${p.memo?' · '+esc(p.memo):''}</div>
+          <div class="btns" style="margin-top:6px"><a class="btn sm" href="${GM}/dir/?api=1&destination=${ll(p)}&travelmode=${e.mode}" target="_blank" rel="noopener">길찾기</a><a class="btn sm" href="${esc(placeLink(p))}" target="_blank" rel="noopener">구글맵</a>
+          ${S.canWrite&&days.includes(today)&&p.day!==today?`<button class="btn sm ghost" data-today="${p.id}">오늘 일정에 넣기</button>`:''}</div></div></div></div>`).join('')
+          :`<p class="muted">조건에 맞는 장소가 없어요.</p>`}
+        ${noXY?`<p class="tiny">위치가 없는 ${noXY}곳은 거리 계산에서 빠졌어요.</p>`:''}<p class="tiny">거리와 시간은 직선거리 기준 추정이에요. 정확한 경로는 '길찾기'에서 확인하세요.</p>`;
+      body.querySelectorAll('[data-nc]').forEach(b=>b.onclick=()=>{nearState.cat=b.dataset.nc;draw()});
+      body.querySelector('[data-only]').onchange=e=>{nearState.only=e.target.checked;draw()};
+      body.querySelectorAll('[data-today]').forEach(b=>b.onclick=async()=>{await patch('places',b.dataset.today,{day:today});toast('오늘 일정에 넣었어요');draw()});
+    };
+    if(!navigator.geolocation){body.innerHTML='<p>이 브라우저에서는 위치를 확인할 수 없어요.</p>';return}
+    navigator.geolocation.getCurrentPosition(pos=>{nearState.pos={lat:pos.coords.latitude,lng:pos.coords.longitude};draw()},
+      err=>{body.innerHTML=`<p>현재 위치를 가져오지 못했어요.</p><p class="tiny">${err.code===1?'위치 권한이 꺼져 있어요. 휴대폰 설정에서 이 브라우저(사파리·크롬)의 위치 접근을 허용한 뒤 다시 눌러 주세요.':'잠시 후 다시 시도해 주세요. 실내라면 신호가 약할 수 있어요.'}</p>`},
+      {enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+  });
 }
 function helpSheet(back){
   openSheet(`<h3>📍 위치 정확도 높이는 법</h3>
@@ -1063,6 +1095,7 @@ document.addEventListener('click',async e=>{
   else if(a==='rLeg'){S.rFrom=el.dataset.a;S.rTo=el.dataset.b;render()}
   else if(a==='fixLoc')placeSheet(S.places.find(p=>p.id===id),true);
   else if(a==='help')helpSheet();
+  else if(a==='near')nearSheet();
   else if(a==='unday')patch('places',id,{day:''});
   else if(a==='geo'){el.disabled=true;el.textContent='찾는 중…';const col=el.dataset.col;await geocode(col,id,S[col].find(x=>x.id===id))}
   else if(a==='geoAll'){el.disabled=true;for(const p of S.places.filter(p=>!hasXY(p)))await geocode('places',p.id,p)}
