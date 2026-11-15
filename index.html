@@ -408,14 +408,44 @@ function olcRecover(short,ref){const pad=8-short.indexOf('+');const res=Math.pow
   if(ref.lng+half<lng)lng-=res;else if(ref.lng-half>lng)lng+=res;return{lat,lng}}
 const SRC={code:'플러스코드',coord:'좌표',link:'구글맵 링크'};
 const refCache={};
+/* 주요 도시 기준점 (짧은 플러스코드는 기준 도시에서 반경 약 50km 안에서만 정확히 풀림) */
+const CITY=[
+ [/고베|kobe|神戸/i,34.6901,135.1955],[/교토|kyoto|京都/i,35.0116,135.7681],[/오사카|osaka|大阪/i,34.6937,135.5023],[/나라|nara|奈良/i,34.6851,135.8048],
+ [/도쿄|tokyo|東京/i,35.6762,139.6503],[/요코하마|yokohama|横浜/i,35.4437,139.638],[/나고야|nagoya|名古屋/i,35.1815,136.9066],[/후쿠오카|fukuoka|福岡/i,33.5904,130.4017],
+ [/삿포로|sapporo|札幌/i,43.0618,141.3545],[/오키나와|나하|naha|okinawa|那覇/i,26.2124,127.6809],[/히로시마|hiroshima|広島/i,34.3853,132.4553],[/가나자와|kanazawa|金沢/i,36.5613,136.6562],
+ [/서울|seoul/i,37.5665,126.978],[/인천|incheon/i,37.4563,126.7052],[/부산|busan/i,35.1796,129.0756],[/제주|jeju/i,33.4996,126.5312],[/강릉|gangneung/i,37.7519,128.8761],[/경주|gyeongju/i,35.8562,129.2247],
+ [/방콕|bangkok/i,13.7563,100.5018],[/타이베이|taipei|台北/i,25.033,121.5654],[/홍콩|hong kong|香港/i,22.3193,114.1694],[/싱가포르|singapore/i,1.3521,103.8198],
+ [/다낭|da nang/i,16.0544,108.2022],[/하노이|hanoi/i,21.0278,105.8342],[/호치민|ho chi minh/i,10.8231,106.6297],[/세부|cebu/i,10.3157,123.8854],[/괌|guam/i,13.4443,144.7937],
+ [/상하이|shanghai|上海/i,31.2304,121.4737],[/베이징|beijing|北京/i,39.9042,116.4074],[/파리|paris/i,48.8566,2.3522],[/런던|london/i,51.5072,-0.1276],[/로마|rome|roma/i,41.9028,12.4964],
+ [/바르셀로나|barcelona/i,41.3874,2.1686],[/뉴욕|new york/i,40.7128,-74.006],[/로스앤젤레스|los angeles/i,34.0522,-118.2437],[/하와이|호놀룰루|honolulu/i,21.3069,-157.8583],[/시드니|sydney/i,-33.8688,151.2093]];
+const cityRef=t=>{if(!t)return null;for(const[re,lat,lng]of CITY)if(re.test(t))return{lat,lng};return null};
 async function refPoint(locality){
+  const c=cityRef(locality);if(c)return c;
   if(locality){const k=locality.trim();if(refCache[k])return refCache[k];
     if(sample){try{const r=await sample(`"${k}"${S.info?.destination?` (여행지: ${S.info.destination})`:''}의 대략적 중심 좌표를 JSON만 출력: {"lat":숫자,"lng":숫자}`,{modelTier:'quick'});const j=parseJSON(r.text);if(j&&typeof j.lat==='number'){refCache[k]=j;return j}}catch(e){}}}
+  const d=cityRef(S.info?.destination);if(d)return d;
   const good=[...S.places,...S.stays].filter(p=>hasXY(p)&&p.xySrc!=='ai');
   if(good.length)return{lat:good.reduce((a,p)=>a+p.lat,0)/good.length,lng:good.reduce((a,p)=>a+p.lng,0)/good.length};
   if(typeof S.info?.refLat==='number')return{lat:S.info.refLat,lng:S.info.refLng};
-  if(S.info?.destination&&locality!==S.info.destination)return refPoint(S.info.destination);
   return null;
+}
+/* 예전에 잘못 풀린 짧은 플러스코드 좌표를 도시 기준으로 다시 계산해서 고침 (한 번만) */
+let repairing=false;const repaired=new Set();
+async function repairLocations(){
+  if(repairing||!S.tid||!S.canWrite)return;repairing=true;
+  try{
+    const fix=async(col,doc,txt,latK,lngK)=>{
+      const key=col+doc.id+latK;if(repaired.has(key)||!txt)return;repaired.add(key);
+      const m=txt.match(/(?:^|[^0-9A-Z])([23456789CFGHJMPQRVWX]{4,6}\+[23456789CFGHJMPQRVWX]{2,3})(?![0-9A-Z])/i);if(!m)return;
+      const ref=cityRef(txt.replace(m[1],''))||cityRef(S.info?.destination);if(!ref)return;
+      const q=olcRecover(m[1],ref);const cur={lat:doc[latK],lng:doc[lngK]};
+      if(typeof cur.lat==='number'&&hav(cur,q)<1)return;
+      await patch(col,doc.id,{[latK]:q.lat,[lngK]:q.lng});
+    };
+    for(const p of[...S.places])await fix('places',p,p.locText,'lat','lng');
+    for(const st of[...S.stays])await fix('stays',st,st.locText,'lat','lng');
+    for(const t of[...S.transport]){await fix('transport',t,t.fromLoc,'fromLat','fromLng');await fix('transport',t,t.toLoc,'toLat','toLng')}
+  }finally{repairing=false}
 }
 /* 입력 → 위치: 좌표 > 플러스코드 > 구글맵 링크 > 주소 */
 async function resolveLoc(text){
@@ -987,7 +1017,7 @@ function enterTrip(tid,tab='home'){
     else{
       tripSubs.push(db.doc(infoPath(tid)).onSnapshot(sn=>{S.info=sn.exists?sn.data():null;S.loaded.trip=true;
         if(!sn.exists&&!sn.metadata.fromCache&&S.tid===tid){leaveTrip();return}render()},()=>{S.loaded.trip=true;render()}));
-      TRIP_COLS.forEach(c=>tripSubs.push(db.collection(colPath(c,tid)).onSnapshot(q=>{if(S.tid!==tid)return;S[c]=q.docs.map(d=>({id:d.id,...d.data()}));if(c==='places')loadNames();render()},()=>{})));
+      TRIP_COLS.forEach(c=>tripSubs.push(db.collection(colPath(c,tid)).onSnapshot(q=>{if(S.tid!==tid)return;S[c]=q.docs.map(d=>({id:d.id,...d.data()}));if(c==='places')loadNames();render();clearTimeout(S._rp);S._rp=setTimeout(repairLocations,1500)},()=>{})));
     }}
   S.tab=tab;setHash();render();scrollTo(0,0);
 }
