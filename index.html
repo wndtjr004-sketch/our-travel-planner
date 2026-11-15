@@ -259,6 +259,9 @@ body.qpad #minis{display:none}
 .roamer.on{opacity:1}
 .roamer img{height:78px;display:block;filter:drop-shadow(0 6px 5px rgba(90,70,40,.2))}
 .roamer.flip img{transform:scaleX(-1)}
+/* 폼 칸이 화면 밖으로 넘치지 않게 */
+.two>*{min-width:0}
+.f input[type=datetime-local],.f input[type=date]{min-width:0;font-size:14px}
 /* 이전 버튼 */
 .navchips{position:absolute;top:12px;left:12px;z-index:2;display:flex;gap:6px}
 .navchips .backchip{position:static}
@@ -482,12 +485,15 @@ function dayPlan(day){
 
 /* ---------- 구간 길찾기 ---------- */
 Object.assign(S,{rFrom:null,rTo:null,rMode:'transit',rDay:null});
+const endPt=(t,w)=>{const la=t[w+'Lat'],ln=t[w+'Lng'];return typeof la==='number'&&typeof ln==='number'?{lat:la,lng:ln,name:t[w]}:null};
+const endParam=(t,w)=>{const p=endPt(t,w);return p?ll(p):encodeURIComponent(t[w]||'')};
 function pointList(pl){
   const L=[{key:'me',label:'📱 지금 내 위치',pt:null}];
   const seen=new Set();
   S.stays.filter(hasXY).forEach(st=>{L.push({key:'s:'+st.id,label:'🏨 '+st.name,pt:st,grp:'숙소'})});
   pl.ord.forEach((p,i)=>{seen.add(p.id);L.push({key:'p:'+p.id,label:`${i+1}. ${p.name}`,pt:p,grp:'이날 일정 (동선 순서)'})});
   S.places.filter(p=>hasXY(p)&&!seen.has(p.id)).forEach(p=>L.push({key:'p:'+p.id,label:(CAT_ICO[p.cat]||'📍')+' '+p.name,pt:p,grp:'다른 저장 장소'}));
+  const hubs=new Set();S.transport.forEach(t=>['from','to'].forEach(w=>{const q=endPt(t,w);if(q&&!hubs.has(t[w])){hubs.add(t[w]);L.push({key:'t:'+t.id+':'+w,label:'✈️ '+t[w],pt:q,grp:'공항·역'})}}));
   return L;
 }
 function pickerCard(pl){
@@ -584,7 +590,7 @@ function tCard(t){
   const intl=t.scope==='intl';
   return`<div class="card" data-act="editT" data-id="${t.id}" style="cursor:pointer"><div class="row"><div class="ico img ${intl?'intl':''}">${modeImg(t.mode)}</div><div class="grow">
   <div><span class="tag ${intl?'intl':''}">${intl?'국제':'국내'}</span> <span class="tiny">${esc(t.mode||'')} ${esc(t.carrier||'')} ${esc(t.number||'')}</span></div>
-  <div class="route">${esc(t.from||'?')} → ${esc(t.to||'?')}</div>
+  <div class="route">${esc(t.from||'?')} → ${esc(t.to||'?')}</div>${(endPt(t,'from')||endPt(t,'to'))?`<div class="tiny">📍 ${[endPt(t,'from')?'출발지':'',endPt(t,'to')?'도착지':''].filter(Boolean).join('·')} 위치 등록됨</div>`:''}
   <div class="muted">${fmtDT(t.depart)}${t.arrive?' → '+fmtDT(t.arrive):''}</div>
   ${t.bookingRef?`<div class="tiny">예약번호 <b>${esc(t.bookingRef)}</b></div>`:''}${attHTML(t)}</div></div></div>`;
 }
@@ -663,8 +669,8 @@ function renderPlan(){
   tr.forEach(t=>{
     const arr=(t.arrive||'').startsWith(S.day)&&t.to,dep=(t.depart||'').startsWith(S.day)&&t.from;
     let link='';
-    if(arr&&st.sleep)link=`<a class="btn sm" href="${GM}/dir/?api=1&origin=${encodeURIComponent(t.to)}&destination=${ll(st.sleep)}&travelmode=transit" target="_blank" rel="noopener"><img class="cimg xs" src="img/tr-subway.webp" alt="">${esc(t.to)} → 숙소 길찾기</a>`;
-    else if(dep&&st.wake)link=`<a class="btn sm" href="${GM}/dir/?api=1&origin=${ll(st.wake)}&destination=${encodeURIComponent(t.from)}&travelmode=transit" target="_blank" rel="noopener"><img class="cimg xs" src="img/tr-subway.webp" alt="">숙소 → ${esc(t.from)} 길찾기</a>`;
+    if(arr&&st.sleep)link=`<a class="btn sm" href="${GM}/dir/?api=1&origin=${endParam(t,'to')}&destination=${ll(st.sleep)}&travelmode=transit" target="_blank" rel="noopener"><img class="cimg xs" src="img/tr-subway.webp" alt="">${esc(t.to)} → 숙소 길찾기</a>`;
+    else if(dep&&st.wake)link=`<a class="btn sm" href="${GM}/dir/?api=1&origin=${ll(st.wake)}&destination=${endParam(t,'from')}&travelmode=transit" target="_blank" rel="noopener"><img class="cimg xs" src="img/tr-subway.webp" alt="">숙소 → ${esc(t.from)} 길찾기</a>`;
     h+=`<div class="card" style="padding:10px 12px"><div class="row"><span>${modeImg(t.mode,'sm')}</span><div class="grow tiny"><b style="color:var(--ink)">${esc(t.from)} → ${esc(t.to)}</b> · ${fmtDT(t.depart)}${t.arrive?' → '+fmtDT(t.arrive):''}</div></div>${link?`<div style="margin-top:8px">${link}</div>`:''}</div>`});
   if(!pl.all.length){h+=`<div class="card empty"><img class="eimg" src="img/empty-plan.webp" alt=""><p>이날 갈 곳을 정하면 최적 동선이 자동으로 계산돼요.</p>${S.canWrite?`<button class="btn pri" data-act="pick">가고 싶은 곳에서 고르기</button>`:''}</div>`;return h}
   h+=`<div class="row" style="justify-content:space-between;margin-bottom:10px"><div><b>${pl.ord.length}곳</b> <span class="muted">· 약 ${pl.km.toFixed(1)}km · ${fmtMin(pl.min)}(추정)</span></div>
@@ -812,6 +818,8 @@ function bookingForm(kind,x){
    <div class="two"><div class="f"><label>수단</label><select name="mode">${Object.keys(MODES).map(m=>`<option ${x.mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
    <div class="f"><label>항공사·회사 / 편명</label><div class="two" style="gap:6px"><input name="carrier" value="${esc(x.carrier||'')}" placeholder="대한항공"><input name="number" value="${esc(x.number||'')}" placeholder="KE723"></div></div></div>
    <div class="two"><div class="f"><label>출발지</label><input name="from" value="${esc(x.from||'')}" placeholder="인천(ICN)"></div><div class="f"><label>도착지</label><input name="to" value="${esc(x.to||'')}" placeholder="간사이(KIX)"></div></div>
+   <div class="f"><label>출발지 위치 (공항·역) <span class="tiny">선택</span></label><textarea name="fromLoc" rows="1" placeholder="플러스코드·좌표·구글맵 링크 (예: MMFQ+2X 고베)">${esc(x.fromLoc||'')}</textarea><div class="hint" data-hint="from"></div></div>
+   <div class="f"><label>도착지 위치 (공항·역) <span class="tiny">선택</span></label><textarea name="toLoc" rows="1" placeholder="플러스코드·좌표·구글맵 링크">${esc(x.toLoc||'')}</textarea><div class="hint" data-hint="to"></div><div class="hint"><a href="#" data-help>정확한 위치 넣는 법 ›</a></div></div>
    <div class="two"><div class="f"><label>출발 (현지 시각)</label><input type="datetime-local" name="depart" value="${esc(x.depart||'')}"></div><div class="f"><label>도착 (현지 시각)</label><input type="datetime-local" name="arrive" value="${esc(x.arrive||'')}"></div></div>`:`
    <div class="f"><label>숙소 이름</label><input name="name" value="${esc(x.name||'')}" required placeholder="예: 호텔 그레이서리 난바"></div>
    <div class="f"><label>구글맵 주소 · 플러스코드 · 좌표 (동선 출발점)</label><textarea name="loc" rows="2" placeholder="예: MMFQ+2X 오사카">${esc(x.locText||x.address||x.mapUrl||'')}</textarea><div class="hint" id="xyHint"></div></div>
@@ -831,6 +839,12 @@ function bookingSheet(kind,item){
     const fm=sh.querySelector('#fm'),aiBox=sh.querySelector('#aiBox');
     const drawAtt=()=>{sh.querySelector('#attList').innerHTML=F.att.map((f,i)=>`<span class="att">📎 ${esc(f.name)} <button type="button" data-rm="${i}" style="border:0;background:none;cursor:pointer;color:var(--coral)">×</button></span>`).join('');
       sh.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{F.att.splice(+b.dataset.rm,1);drawAtt()})};drawAtt();
+    if(kind==='transport'){F.ends={from:endPt(x,'from'),to:endPt(x,'to')};
+      const hb=sh.querySelector('[data-help]');if(hb)hb.onclick=e=>{e.preventDefault();helpSheet()};
+      ['from','to'].forEach(w=>{const u=fm.querySelector(`[name=${w}Loc]`),hint=sh.querySelector(`[data-hint=${w}]`);let sq=0,ut;
+        const show=()=>{const q=F.ends[w];hint.innerHTML=q?`<span class="ok">📍 정확한 위치</span> <a href="${GM}/search/?api=1&query=${ll(q)}" target="_blank" rel="noopener">구글맵에서 확인 ›</a>`:(u.value.trim()?'위치를 읽지 못했어요. 플러스코드나 좌표를 넣어 주세요.':'비워 두면 이름으로 구글맵에서 찾아요.')};
+        const upd=async()=>{const q=++sq;const r=await resolveLoc(u.value);if(q!==sq)return;F.ends[w]=hasXY(r)?{lat:r.lat,lng:r.lng}:null;show()};
+        u.oninput=()=>{clearTimeout(ut);ut=setTimeout(upd,350)};show()})}
     if(kind==='stays'){const u=fm.querySelector('[name=loc]'),hint=sh.querySelector('#xyHint');let sq=0,ut;
       const show=()=>{hint.innerHTML=hasXY(F)?(F.xySrc==='ai'?'<span class="tag warn">대략적 위치</span> 플러스코드를 넣으면 정확해져요':`<span class="ok">📍 정확한 위치 (${SRC[F.xySrc]||'링크'})</span>`):'플러스코드나 좌표를 넣으면 숙소 위치가 정확해져요. 주소만 넣으면 AI가 대략 찾아요.'};
       const upd=async()=>{const q=++sq;const r=await resolveLoc(u.value);if(q!==sq)return;F.url=r.url||'';F.address=r.address||'';F.locText=u.value.trim();
@@ -850,6 +864,7 @@ function bookingSheet(kind,item){
     fm.onsubmit=async e=>{e.preventDefault();const v=fv(fm);
       if(kind==='stays'&&v.checkOut<v.checkIn)return toast('체크아웃이 체크인보다 빨라요');
       const doc={...(item||{}),...v,attachments:F.att,createdAt:item?.createdAt||Date.now(),createdBy:item?.createdBy||S.me||null};
+      if(kind==='transport'){['from','to'].forEach(w=>{const q=F.ends&&F.ends[w];doc[w+'Lat']=q?+q.lat:null;doc[w+'Lng']=q?+q.lng:null})}
       if(kind==='stays'){delete doc.loc;doc.locText=F.locText||'';doc.address=F.address||'';doc.mapUrl=F.url||'';doc.lat=hasXY(F)?+F.lat:null;doc.lng=hasXY(F)?+F.lng:null;doc.xySrc=hasXY(F)?(F.xySrc||'link'):null}
       delete doc.id;const id=await put(kind,item?.id,doc);
       if(F.multi&&F.multi.length>1&&!item){for(const extra of F.multi.slice(1)){await put('transport',null,{...normT(extra),attachments:F.att,createdAt:Date.now(),createdBy:S.me||null})}toast(`${F.multi.length}건을 추가했어요`)}
