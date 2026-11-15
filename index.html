@@ -259,6 +259,10 @@ body.qpad #minis{display:none}
 .roamer.on{opacity:1}
 .roamer img{height:78px;display:block;filter:drop-shadow(0 6px 5px rgba(90,70,40,.2))}
 .roamer.flip img{transform:scaleX(-1)}
+/* 이전 버튼 */
+.navchips{position:absolute;top:12px;left:12px;z-index:2;display:flex;gap:6px}
+.navchips .backchip{position:static}
+.navchips.plain{position:static}
 /* 여행 목록 */
 .tthumb{width:76px;height:76px;flex:none;border-radius:18px;background:#E9DCC8 center/cover no-repeat;position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
 .tthumb span{position:absolute;left:6px;bottom:6px;font-family:'Outfit',sans-serif;font-weight:800;font-size:12px;color:#fff;background:rgba(34,37,58,.55);border-radius:8px;padding:1px 6px}
@@ -540,12 +544,12 @@ function render(){
   if(!S.tid||!S.info){h+=renderTrips();$('#quick').classList.remove('on');document.body.classList.remove('qpad');a.innerHTML=h;
     if(S._lastTab!=='list'){S._lastTab='list';a.classList.remove('enter');void a.offsetWidth;a.classList.add('enter')}return}
   {
-    const back=`<button class="backchip" data-act="backList">‹ 여행 목록</button>`;
+    const back=`<span class="navchips"><button class="backchip" data-act="goBack">‹ 이전</button><button class="backchip" data-act="backList">여행 목록</button></span>`;
     const days=tripDays();const today=iso(new Date());
     let dd='';if(S.info.startDate){const n=nights(today,S.info.startDate);dd=n>0?`D-${n}`:(S.info.endDate&&today<=S.info.endDate?'여행 중':'다녀옴')}
     if(S.tab==='home')h+=`<div class="hero"><div class="hero-media"><div class="hero-img" style="background-image:url('${esc(coverUrl(S.info))}')"></div>${back}${dd?`<div class="hero-dday"><b>${dd}</b></div>`:''}</div><div class="hero-in"><div class="hero-dest">${esc(S.info.destination||'어디로 떠나볼까요')}</div><h1>${esc(S.info.title||'우리 여행')}</h1>
       <div class="hero-meta">${S.info.startDate?fmtD(S.info.startDate)+' – '+fmtD(S.info.endDate)+` · ${days.length-1}박 ${days.length}일`:'날짜 미정'}</div></div></div>`;
-    else h+=`<div style="margin:-2px 0 8px">${back.replace('backchip','backchip plain')}</div><div class="top"><div class="grow"><div class="eyebrow">${esc(S.info.destination||'')}</div><h1>${{places:'가고 싶은 곳',plan:'일정 · 동선',book:'예약'}[S.tab]||''}</h1></div>${dd?`<span class="dday">${dd}</span>`:''}</div>`;
+    else h+=`<div style="margin:-2px 0 8px">${back.replace(/backchip/g,'backchip plain').replace('navchips','navchips plain')}</div><div class="top"><div class="grow"><div class="eyebrow">${esc(S.info.destination||'')}</div><h1>${{places:'가고 싶은 곳',plan:'일정 · 동선',book:'예약'}[S.tab]||''}</h1></div>${dd?`<span class="dday">${dd}</span>`:''}</div>`;
     h+=({home:renderHome,places:renderPlaces,plan:renderPlan,book:renderBook}[S.tab]||renderHome)();
   }
   h+=`<nav class="tabbar"><div class="in">${[['home','tab-home','홈'],['places','tab-places','가고 싶은 곳'],['plan','tab-plan','일정·동선'],['book','tab-book','예약']].map(([k,i,l])=>`<button data-act="tab" data-k="${k}" class="${S.tab===k?'on':''}"><i>${i.startsWith('tab-')?`<img src="img/${i}.webp" alt="">`:i}</i>${l}</button>`).join('')}</div></nav>`;
@@ -566,7 +570,7 @@ function renderTrips(){
   const today=iso(new Date());
   const up=S.trips.filter(t=>!t.endDate||t.endDate>=today).sort((a,b)=>(a.startDate||'9').localeCompare(b.startDate||'9'));
   const past=S.trips.filter(t=>t.endDate&&t.endDate<today).sort((a,b)=>b.startDate.localeCompare(a.startDate));
-  let h=`<div class="hero"><div class="hero-media"><div class="hero-img"></div></div><div class="hero-in"><div class="hero-dest">우리의 여행 기록</div><h1>어디로 떠나볼까요?</h1><div class="hero-meta">여행 ${S.trips.length}개${up.length?` · 다가오는 여행 ${up.length}개`:''}</div></div></div>`;
+  let h=`<div class="hero"><div class="hero-media"><div class="hero-img"></div>${navStack.length?'<span class="navchips"><button class="backchip" data-act="goBack">‹ 이전</button></span>':''}</div><div class="hero-in"><div class="hero-dest">우리의 여행 기록</div><h1>어디로 떠나볼까요?</h1><div class="hero-meta">여행 ${S.trips.length}개${up.length?` · 다가오는 여행 ${up.length}개`:''}</div></div></div>`;
   if(S.canWrite)h+=`<button class="btn pri" style="width:100%;padding:13px;margin-bottom:6px" data-act="newTrip">+ 새 여행 만들기</button>`;
   if(!S.trips.length)h+=`<div class="card empty"><img class="eimg" src="img/couple.webp" alt="" style="border-radius:50%"><p>아직 여행이 없어요.<br><span class="muted">새 여행을 만들면 여행마다 장소·일정·예약을 따로 관리할 수 있어요.</span></p></div>`;
   if(up.length)h+=`<div class="sec"><h2>${'<img class="cimg h" src="img/tr-air.webp" alt="">'}다가오는 여행</h2></div>`+up.map(tripCard).join('');
@@ -954,7 +958,14 @@ function enterTrip(tid,tab='home'){
   S.tab=tab;setHash();render();scrollTo(0,0);
 }
 function leaveTrip(){tripSubs.forEach(u=>{try{u()}catch(e){}});tripSubs=[];S.tid=null;S.info=null;TRIP_COLS.forEach(c=>S[c]=[]);setHash();render();scrollTo(0,0)}
-function setHash(){const h=S.tid?`t-${S.tid}-${S.tab}`:'trips';if(location.hash.slice(1)!==h)location.hash=h}
+/* 이전으로 가기: 앱 안에서 이동한 화면을 기억 */
+const navStack=[];let goingBack=false;
+function setHash(){const h=S.tid?`t-${S.tid}-${S.tab}`:'trips';const cur=location.hash.slice(1)||'trips';if(cur!==h){navStack.push(cur);if(navStack.length>50)navStack.shift();location.hash=h}}
+function goBack(){
+  if($('#sheetWrap').classList.contains('open')){closeSheet();return}
+  if(!navStack.length){if(S.tid)leaveTrip();return}
+  goingBack=true;const prev=navStack.pop();location.hash=prev;
+}
 function parseHash(){const h=location.hash.slice(1);const m=h.match(/^t-([A-Za-z0-9]+)-(home|places|plan|book)$/);return m?{tid:m[1],tab:m[2]}:null}
 function fail(e){if(e?.code==='invalid_argument'){S.canWrite=false;render();toast('편집 권한이 없어 저장하지 못했어요')}else if(e?.code==='quota_exceeded')toast('저장 공간이 가득 찼어요. 오래된 항목을 지워 주세요');else toast('저장하지 못했어요. 다시 시도해 주세요');return null}
 
@@ -968,6 +979,7 @@ document.addEventListener('click',async e=>{
   else if(a==='openTrip')enterTrip(id,'home');
   else if(a==='newTrip')tripSheet(true);
   else if(a==='backList')leaveTrip();
+  else if(a==='goBack')goBack();
   else if(a==='day'){S.day=el.dataset.d;render()}
   else if(a==='cat'){S.cat=el.dataset.k;render()}
   else if(a==='bk'){S.bk=el.dataset.k;render()}
@@ -1000,7 +1012,9 @@ document.addEventListener('change',e=>{
   else if(el.dataset.act==='rFrom'){S.rFrom=el.value;render()}
   else if(el.dataset.act==='rTo'){S.rTo=el.value;render()}
 });
-window.addEventListener('hashchange',()=>{const r=parseHash();if(r){if(r.tid!==S.tid||r.tab!==S.tab)enterTrip(r.tid,r.tab)}else if(S.tid)leaveTrip()});
+window.addEventListener('hashchange',()=>{const now=location.hash.slice(1)||'trips';
+  if(goingBack)goingBack=false;else if(navStack[navStack.length-1]===now)navStack.pop();
+  const r=parseHash();if(r){if(r.tid!==S.tid||r.tab!==S.tab)enterTrip(r.tid,r.tab)}else if(S.tid)leaveTrip()});
 
 /* ---------- 시작 ---------- */
 Object.assign(S,{tid:null,trips:[],legacy:null,tripDocs:[]});
