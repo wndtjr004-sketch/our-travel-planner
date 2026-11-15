@@ -486,7 +486,8 @@ function dayPlan(day){
 /* ---------- 구간 길찾기 ---------- */
 Object.assign(S,{rFrom:null,rTo:null,rMode:'transit',rDay:null});
 const endPt=(t,w)=>{const la=t[w+'Lat'],ln=t[w+'Lng'];return typeof la==='number'&&typeof ln==='number'?{lat:la,lng:ln,name:t[w]}:null};
-const endParam=(t,w)=>{const p=endPt(t,w);return p?ll(p):encodeURIComponent(t[w]||'')};
+const endParam=(t,w)=>{const p=endPt(t,w);if(p)return ll(p);const tx=(t[w+'Loc']||'').trim();return encodeURIComponent(tx&&!/^https?:/.test(tx)?tx:(t[w]||''))};
+const KR_AIR=/인천|ICN|김포|GMP|김해|PUS|제주|CJU|청주|CJJ|대구|TAE|무안|MWX|양양|YNY|광주|KWJ|여수|RSU|울산|USN|포항|KPO|사천|HIN|원주|WJU|군산|KUV|서울|부산|한국|korea/i;
 function pointList(pl){
   const L=[{key:'me',label:'📱 지금 내 위치',pt:null}];
   const seen=new Set();
@@ -590,7 +591,7 @@ function tCard(t){
   const intl=t.scope==='intl';
   return`<div class="card" data-act="editT" data-id="${t.id}" style="cursor:pointer"><div class="row"><div class="ico img ${intl?'intl':''}">${modeImg(t.mode)}</div><div class="grow">
   <div><span class="tag ${intl?'intl':''}">${intl?'국제':'국내'}</span> <span class="tiny">${esc(t.mode||'')} ${esc(t.carrier||'')} ${esc(t.number||'')}</span></div>
-  <div class="route">${esc(t.from||'?')} → ${esc(t.to||'?')}</div>${(endPt(t,'from')||endPt(t,'to'))?`<div class="tiny">📍 ${[endPt(t,'from')?'출발지':'',endPt(t,'to')?'도착지':''].filter(Boolean).join('·')} 위치 등록됨</div>`:''}
+  <div class="route">${esc(t.from||'?')} → ${esc(t.to||'?')}</div>${(endPt(t,'from')||endPt(t,'to'))?`<div class="tiny">📍 ${[endPt(t,'from')?'출발지':'',endPt(t,'to')?'도착지':''].filter(Boolean).join('·')} 위치 등록됨</div>`:''}${t.scope==='intl'&&t.mode==='항공'?['from','to'].filter(w=>(t[w]||'').trim()&&!KR_AIR.test(t[w])&&!endPt(t,w)&&!(t[w+'Loc']||'').trim()).map(w=>`<div class="tiny"><span class="tag warn">해외 공항 위치 없음 · ${w==='from'?'출발지':'도착지'}</span></div>`).join(''):''}
   <div class="muted">${fmtDT(t.depart)}${t.arrive?' → '+fmtDT(t.arrive):''}</div>
   ${t.bookingRef?`<div class="tiny">예약번호 <b>${esc(t.bookingRef)}</b></div>`:''}${attHTML(t)}</div></div></div>`;
 }
@@ -818,8 +819,8 @@ function bookingForm(kind,x){
    <div class="two"><div class="f"><label>수단</label><select name="mode">${Object.keys(MODES).map(m=>`<option ${x.mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
    <div class="f"><label>항공사·회사 / 편명</label><div class="two" style="gap:6px"><input name="carrier" value="${esc(x.carrier||'')}" placeholder="대한항공"><input name="number" value="${esc(x.number||'')}" placeholder="KE723"></div></div></div>
    <div class="two"><div class="f"><label>출발지</label><input name="from" value="${esc(x.from||'')}" placeholder="인천(ICN)"></div><div class="f"><label>도착지</label><input name="to" value="${esc(x.to||'')}" placeholder="간사이(KIX)"></div></div>
-   <div class="f"><label>출발지 위치 (공항·역) <span class="tiny">선택</span></label><textarea name="fromLoc" rows="1" placeholder="플러스코드·좌표·구글맵 링크 (예: MMFQ+2X 고베)">${esc(x.fromLoc||'')}</textarea><div class="hint" data-hint="from"></div></div>
-   <div class="f"><label>도착지 위치 (공항·역) <span class="tiny">선택</span></label><textarea name="toLoc" rows="1" placeholder="플러스코드·좌표·구글맵 링크">${esc(x.toLoc||'')}</textarea><div class="hint" data-hint="to"></div><div class="hint"><a href="#" data-help>정확한 위치 넣는 법 ›</a></div></div>
+   <div class="f"><label>출발지 위치 (주소·플러스코드·좌표) <span class="tiny" data-req="from">선택</span></label><textarea name="fromLoc" rows="1" placeholder="예: 고베공항 주소 또는 MMFQ+2X 고베">${esc(x.fromLoc||'')}</textarea><div class="hint" data-hint="from"></div></div>
+   <div class="f"><label>도착지 위치 (주소·플러스코드·좌표) <span class="tiny" data-req="to">선택</span></label><textarea name="toLoc" rows="1" placeholder="예: 고베공항 주소 또는 MMFQ+2X 고베">${esc(x.toLoc||'')}</textarea><div class="hint" data-hint="to"></div><div class="hint"><a href="#" data-help>정확한 위치 넣는 법 ›</a></div></div>
    <div class="two"><div class="f"><label>출발 (현지 시각)</label><input type="datetime-local" name="depart" value="${esc(x.depart||'')}"></div><div class="f"><label>도착 (현지 시각)</label><input type="datetime-local" name="arrive" value="${esc(x.arrive||'')}"></div></div>`:`
    <div class="f"><label>숙소 이름</label><input name="name" value="${esc(x.name||'')}" required placeholder="예: 호텔 그레이서리 난바"></div>
    <div class="f"><label>구글맵 주소 · 플러스코드 · 좌표 (동선 출발점)</label><textarea name="loc" rows="2" placeholder="예: MMFQ+2X 오사카">${esc(x.locText||x.address||x.mapUrl||'')}</textarea><div class="hint" id="xyHint"></div></div>
@@ -844,7 +845,11 @@ function bookingSheet(kind,item){
       ['from','to'].forEach(w=>{const u=fm.querySelector(`[name=${w}Loc]`),hint=sh.querySelector(`[data-hint=${w}]`);let sq=0,ut;
         const show=()=>{const q=F.ends[w];hint.innerHTML=q?`<span class="ok">📍 정확한 위치</span> <a href="${GM}/search/?api=1&query=${ll(q)}" target="_blank" rel="noopener">구글맵에서 확인 ›</a>`:(u.value.trim()?'위치를 읽지 못했어요. 플러스코드나 좌표를 넣어 주세요.':'비워 두면 이름으로 구글맵에서 찾아요.')};
         const upd=async()=>{const q=++sq;const r=await resolveLoc(u.value);if(q!==sq)return;F.ends[w]=hasXY(r)?{lat:r.lat,lng:r.lng}:null;show()};
-        u.oninput=()=>{clearTimeout(ut);ut=setTimeout(upd,350)};show()})}
+        u.oninput=()=>{clearTimeout(ut);ut=setTimeout(upd,350)};show()});
+      /* 해외 공항이면 위치(주소) 필수 */
+      F.needLoc=w=>{const v=fv(fm);return v.scope==='intl'&&v.mode==='항공'&&(v[w]||'').trim()&&!KR_AIR.test(v[w])};
+      const mark=()=>['from','to'].forEach(w=>{const el=sh.querySelector(`[data-req=${w}]`);const need=F.needLoc(w);el.textContent=need?'해외 공항 · 필수':'선택';el.style.color=need?'var(--coral)':'';el.style.fontWeight=need?'700':''});
+      fm.addEventListener('input',mark);fm.addEventListener('change',mark);mark()}
     if(kind==='stays'){const u=fm.querySelector('[name=loc]'),hint=sh.querySelector('#xyHint');let sq=0,ut;
       const show=()=>{hint.innerHTML=hasXY(F)?(F.xySrc==='ai'?'<span class="tag warn">대략적 위치</span> 플러스코드를 넣으면 정확해져요':`<span class="ok">📍 정확한 위치 (${SRC[F.xySrc]||'링크'})</span>`):'플러스코드나 좌표를 넣으면 숙소 위치가 정확해져요. 주소만 넣으면 AI가 대략 찾아요.'};
       const upd=async()=>{const q=++sq;const r=await resolveLoc(u.value);if(q!==sq)return;F.url=r.url||'';F.address=r.address||'';F.locText=u.value.trim();
@@ -864,6 +869,8 @@ function bookingSheet(kind,item){
     fm.onsubmit=async e=>{e.preventDefault();const v=fv(fm);
       if(kind==='stays'&&v.checkOut<v.checkIn)return toast('체크아웃이 체크인보다 빨라요');
       const doc={...(item||{}),...v,attachments:F.att,createdAt:item?.createdAt||Date.now(),createdBy:item?.createdBy||S.me||null};
+      if(kind==='transport'){for(const w of['from','to']){if(F.needLoc&&F.needLoc(w)&&!(v[w+'Loc']||'').trim()){const el=fm.querySelector(`[name=${w}Loc]`);el.focus();el.style.borderColor='var(--coral)';
+          toast(`해외 공항이라 ${w==='from'?'출발지':'도착지'} 위치(주소나 플러스코드)를 넣어 주세요`);return}}}
       if(kind==='transport'){['from','to'].forEach(w=>{const q=F.ends&&F.ends[w];doc[w+'Lat']=q?+q.lat:null;doc[w+'Lng']=q?+q.lng:null})}
       if(kind==='stays'){delete doc.loc;doc.locText=F.locText||'';doc.address=F.address||'';doc.mapUrl=F.url||'';doc.lat=hasXY(F)?+F.lat:null;doc.lng=hasXY(F)?+F.lng:null;doc.xySrc=hasXY(F)?(F.xySrc||'link'):null}
       delete doc.id;const id=await put(kind,item?.id,doc);
