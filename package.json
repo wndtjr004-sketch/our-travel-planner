@@ -1,0 +1,5 @@
+{
+  "name": "our-travel-planner",
+  "private": true,
+  "dependencies": { "@vercel/blob": "^1.1.1" }
+}
