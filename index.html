@@ -187,7 +187,7 @@ body::before{content:"";position:fixed;inset:-20vmax;z-index:-1;pointer-events:n
 #app{padding-bottom:110px}
 .quick{bottom:calc(76px + env(safe-area-inset-bottom));background:none}
 .quick form{border-radius:22px;background:rgba(255,255,255,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid #fff;box-shadow:0 12px 32px rgba(110,120,216,.16)}
-body.qpad #app{padding-bottom:230px}
+body.qpad #app{padding-bottom:265px}
 /* sheet */
 #sheetWrap{background:rgba(19,26,51,.32);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 #sheetWrap.open #sheet{animation:sheetUp .32s cubic-bezier(.2,.9,.3,1)}
@@ -293,7 +293,7 @@ body.listmode #minis{bottom:calc(4px + env(safe-area-inset-bottom))}
 <body>
 <div id="app"></div>
 <div id="minis" aria-hidden="true"><div class="walker"><img class="wc" src="img/walk-couple.webp" alt=""><span class="heart">♥</span></div></div>
-<div class="quick" id="quick"><form id="qf"><div style="flex:1;min-width:0"><div class="qcats" id="qc"></div><input id="qn" placeholder="장소 이름 (선택)" style="width:100%;border:0;border-bottom:1px solid var(--line);background:none;outline:none;padding:6px 0;font-size:14px"><textarea id="qt" rows="1" placeholder="구글맵 주소·플러스코드 붙여넣기"></textarea></div><button class="btn pri sm" style="padding:8px 14px">추가</button></form></div>
+<div class="quick" id="quick"><form id="qf"><div style="flex:1;min-width:0"><div class="qcats" id="qc"></div><input id="qn" placeholder="장소 이름 (선택)" style="width:100%;border:0;border-bottom:1px solid var(--line);background:none;outline:none;padding:6px 0;font-size:14px"><textarea id="qt" rows="1" placeholder="구글맵 주소·플러스코드 붙여넣기"></textarea><input id="qm" placeholder="메모 (선택) · 예: 저녁 7시 이후 추천" style="width:100%;border:0;border-top:1px solid var(--line);background:none;outline:none;padding:6px 0;font-size:14px"></div><button class="btn pri sm" style="padding:8px 14px">추가</button></form></div>
 <div id="sheetWrap"><div id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
@@ -1125,6 +1125,7 @@ async function enrich(id){
 }
 $('#qt').addEventListener('input',e=>{const t=e.target;t.style.height='auto';t.style.height=Math.min(t.scrollHeight,110)+'px'});
 $('#qt').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('#qf').requestSubmit()}});
+$('#qm').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();$('#qf').requestSubmit()}});
 $('#qn').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();$('#qt').focus()}});
 $('#qf').addEventListener('submit',async e=>{e.preventDefault();const qt=$('#qt'),qn=$('#qn');const text=qt.value.trim(),nameIn=qn.value.trim();
   if(!text&&!nameIn)return;
@@ -1134,9 +1135,9 @@ $('#qf').addEventListener('submit',async e=>{e.preventDefault();const qt=$('#qt'
     if(r.short&&!r.address&&!nameIn&&!r.name){toast('짧은 링크만으로는 위치를 알 수 없어요. 주소나 플러스코드를 넣어 주세요');return}
     if(r.noref&&!r.address){toast('짧은 플러스코드 뒤에 도시명을 붙여 주세요 (예: MMFQ+2X 오사카)');return}
     const name=nameIn||r.name||'';
-    const doc={name:name||(r.address||text).slice(0,24),needName:!name,locText:text,mapUrl:r.url||'',address:r.address||'',cat:qCat==='자동'?'기타':qCat,catFixed:qCat!=='자동',day:'',memo:'',summary:'',tips:[],
+    const doc={name:name||(r.address||text).slice(0,24),needName:!name,locText:text,mapUrl:r.url||'',address:r.address||'',cat:qCat==='자동'?'기타':qCat,catFixed:qCat!=='자동',day:'',memo:($('#qm').value||'').trim(),summary:'',tips:[],
       lat:hasXY(r)?r.lat:null,lng:hasXY(r)?r.lng:null,xySrc:hasXY(r)?r.src:null,pending:!!sample,createdAt:Date.now(),createdBy:S.me||null};
-    qt.value='';qn.value='';qt.style.height='auto';
+    qt.value='';qn.value='';$('#qm').value='';qt.style.height='auto';
     toast(hasXY(r)?`📍 정확한 위치로 추가했어요 (${SRC[r.src]})`:'추가했어요 · 위치는 AI가 대략 추정해요');
     const id=await put('places',null,doc);if(id&&sample)enrich(id);
   }finally{btn.disabled=false}
